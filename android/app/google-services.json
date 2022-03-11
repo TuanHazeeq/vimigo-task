@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "405179415936",
+    "project_id": "vimigo-task",
+    "storage_bucket": "vimigo-task.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:405179415936:android:924621601f7433d3c95565",
+        "android_client_info": {
+          "package_name": "com.example.vimigo_task"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "405179415936-63vrh8bvr5jf7glnng6llfkare7m63o1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB9K6NFrYF2sEHDjMUotmShb3awImTxZG4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "405179415936-63vrh8bvr5jf7glnng6llfkare7m63o1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
