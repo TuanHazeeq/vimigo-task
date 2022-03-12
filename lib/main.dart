@@ -20,6 +20,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  final ValueNotifier<String> _notify = ValueNotifier('');
   bool timeset = true;
   var message = "";
 
@@ -44,15 +45,25 @@ class _MyAppState extends State<MyApp> {
       ..addListener(() {
         if (_scrollController!.offset >=
             _scrollController!.position.maxScrollExtent) {
-          setState(() {
-            message = "Reach the bottom";
-          });
+          _notify.value = "Reach the bottom";
         } else {
-          setState(() {
-            message = "";
-          });
+          _notify.value = '';
         }
       });
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> data = FirebaseFirestore.instance
+      .collection('contacts')
+      .orderBy('check-in', descending: true)
+      .snapshots();
+  Future<void> loadData() async {
+    await Future.delayed(const Duration(seconds: 1));
+    setState(() {
+      data = FirebaseFirestore.instance
+          .collection('contacts')
+          .orderBy('check-in', descending: true)
+          .snapshots();
+    });
   }
 
   @override
@@ -76,19 +87,75 @@ class _MyAppState extends State<MyApp> {
         ),
         body: Column(
           children: [
-            Container(
-              height: 50.0,
-              color: Colors.green,
-              child: Center(
-                child: Text(message),
+            ValueListenableBuilder(
+              builder: (BuildContext context, value, Widget? child) {
+                return Container(
+                  height: 50.0,
+                  color: Colors.green,
+                  child: Center(
+                    child: Text(value.toString()),
+                  ),
+                );
+              },
+              valueListenable: _notify,
+            ),
+            SizedBox(
+              height: 200.0,
+              child: RefreshIndicator(
+                onRefresh: loadData,
+                child: Expanded(
+                  child: StreamBuilder(
+                    stream: data,
+                    builder: (BuildContext context,
+                        AsyncSnapshot<QuerySnapshot> snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        );
+                      }
+
+                      List<QueryDocumentSnapshot<Object?>> itemList =
+                          snapshot.data!.docs;
+                      itemList.shuffle();
+                      itemList.length = 5;
+
+                      return ListView(
+                        children: itemList.map((doc) {
+                          DateTime date = DateTime.parse(
+                              doc['check-in'].toDate().toString());
+                          var ago = timeset
+                              ? timeago.format(date)
+                              : DateFormat('dd MMM yyyy hh:mm').format(date);
+                          return Center(
+                              child: ListTile(
+                            title: Text('Name: ' + doc['user']),
+                            subtitle: Text('Phone Number: ' +
+                                doc['phone'] +
+                                '\nCheck-In: ' +
+                                ago.toString()),
+                            trailing: TextButton(
+                                child: const Text('Share'),
+                                onPressed: () async {
+                                  await Share.share('Name:' +
+                                      doc['user'] +
+                                      '\nPhone:' +
+                                      doc['phone']);
+                                }),
+                          ));
+                        }).toList(),
+                      );
+                    },
+                  ),
+                ),
               ),
+            ),
+            const Divider(
+              thickness: 5.0,
+              color: Colors.black,
             ),
             Expanded(
               child: StreamBuilder(
-                stream: FirebaseFirestore.instance
-                    .collection('contacts')
-                    .orderBy('check-in', descending: true)
-                    .snapshots(),
+                stream: data,
                 builder: (BuildContext context,
                     AsyncSnapshot<QuerySnapshot> snapshot) {
                   if (!snapshot.hasData) {
@@ -96,7 +163,6 @@ class _MyAppState extends State<MyApp> {
                       child: CircularProgressIndicator(),
                     );
                   }
-
                   return ListView(
                     controller: _scrollController,
                     shrinkWrap: true,
