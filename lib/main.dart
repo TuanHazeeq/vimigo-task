@@ -20,12 +20,16 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  //string for reaching bottom of listview
   final ValueNotifier<String> _notify = ValueNotifier('');
+  //int for number of contact listview
+  final ValueNotifier<int> _limiter = ValueNotifier(10);
+  //bool for time format
   bool timeset = true;
-  var message = "";
 
   late ScrollController? _scrollController = ScrollController();
 
+  //load chosen time format
   _loadBool() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -33,6 +37,7 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
+  //save chosen time format
   _savebool() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setBool('option', timeset);
@@ -40,12 +45,18 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void initState() {
+    //load chosen time format at start of app
     _loadBool();
+
+    //scroll controller to detect end of scroll to load more list or show end of scroll
     _scrollController = ScrollController()
       ..addListener(() {
         if (_scrollController!.offset >=
             _scrollController!.position.maxScrollExtent) {
-          _notify.value = "Reach the bottom";
+          //show this message when end of scroll
+          _notify.value = "You have reached end of the list";
+          //add to the limit of contact shown when scroll to the end
+          _limiter.value = _limiter.value + 10;
         } else {
           _notify.value = '';
         }
@@ -56,6 +67,8 @@ class _MyAppState extends State<MyApp> {
       .collection('contacts')
       .orderBy('check-in', descending: true)
       .snapshots();
+
+  //load stream for pull to refresh
   Future<void> loadData() async {
     await Future.delayed(const Duration(seconds: 1));
     setState(() {
@@ -74,6 +87,7 @@ class _MyAppState extends State<MyApp> {
           elevation: 0.0,
           title: const Text('Contact List'),
           actions: [
+            //toggle time format
             IconButton(
               icon: const Icon(Icons.watch),
               onPressed: () {
@@ -87,25 +101,72 @@ class _MyAppState extends State<MyApp> {
         ),
         body: Column(
           children: [
-            ValueListenableBuilder(
-              builder: (BuildContext context, value, Widget? child) {
-                return Container(
-                  height: 50.0,
-                  color: Colors.green,
-                  child: Center(
-                    child: Text(value.toString()),
-                  ),
-                );
-              },
-              valueListenable: _notify,
-            ),
+            //show 5 random contacts
             SizedBox(
               height: 200.0,
+              //pull to refresh widget
               child: RefreshIndicator(
                 onRefresh: loadData,
-                child: Expanded(
-                  child: StreamBuilder(
-                    stream: data,
+                child: StreamBuilder(
+                  stream: data,
+                  builder: (BuildContext context,
+                      AsyncSnapshot<QuerySnapshot> snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(
+                        child: CircularProgressIndicator(),
+                      );
+                    }
+
+                    List<QueryDocumentSnapshot<Object?>> itemList =
+                        snapshot.data!.docs;
+                    //randomize data and take 5 data only
+                    itemList.shuffle();
+                    itemList.length = 5;
+                    //display 5 random contacts
+                    return ListView(
+                      children: itemList.map((doc) {
+                        DateTime date =
+                            DateTime.parse(doc['check-in'].toDate().toString());
+                        var ago = timeset
+                            ? timeago.format(date)
+                            : DateFormat('dd MMM yyyy hh:mm').format(date);
+                        return Center(
+                            child: ListTile(
+                          title: Text('Name: ' + doc['user']),
+                          subtitle: Text('Phone Number: ' +
+                              doc['phone'] +
+                              '\nCheck-In: ' +
+                              ago.toString()),
+                          trailing: TextButton(
+                              child: const Text('Share'),
+                              onPressed: () async {
+                                await Share.share('Name:' +
+                                    doc['user'] +
+                                    '\nPhone:' +
+                                    doc['phone']);
+                              }),
+                        ));
+                      }).toList(),
+                    );
+                  },
+                ),
+              ),
+            ),
+            const Divider(
+              thickness: 5.0,
+              color: Colors.black,
+            ),
+            Expanded(
+              //use value listenable builder to rebuild only this widget when end of scroll to show more contacts if available
+              child: ValueListenableBuilder(
+                builder: (BuildContext context, value, Widget? child) {
+                  return StreamBuilder(
+                    //limit for 10 contacts and add when scroll to end using notifier variable
+                    stream: FirebaseFirestore.instance
+                        .collection('contacts')
+                        .orderBy('check-in', descending: true)
+                        .limit(value as int)
+                        .snapshots(),
                     builder: (BuildContext context,
                         AsyncSnapshot<QuerySnapshot> snapshot) {
                       if (!snapshot.hasData) {
@@ -113,14 +174,11 @@ class _MyAppState extends State<MyApp> {
                           child: CircularProgressIndicator(),
                         );
                       }
-
-                      List<QueryDocumentSnapshot<Object?>> itemList =
-                          snapshot.data!.docs;
-                      itemList.shuffle();
-                      itemList.length = 5;
-
                       return ListView(
-                        children: itemList.map((doc) {
+                        //add scroll controller to detect end of scroll
+                        controller: _scrollController,
+                        shrinkWrap: true,
+                        children: snapshot.data!.docs.map((doc) {
                           DateTime date = DateTime.parse(
                               doc['check-in'].toDate().toString());
                           var ago = timeset
@@ -145,53 +203,24 @@ class _MyAppState extends State<MyApp> {
                         }).toList(),
                       );
                     },
-                  ),
-                ),
-              ),
-            ),
-            const Divider(
-              thickness: 5.0,
-              color: Colors.black,
-            ),
-            Expanded(
-              child: StreamBuilder(
-                stream: data,
-                builder: (BuildContext context,
-                    AsyncSnapshot<QuerySnapshot> snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
-                  }
-                  return ListView(
-                    controller: _scrollController,
-                    shrinkWrap: true,
-                    children: snapshot.data!.docs.map((doc) {
-                      DateTime date =
-                          DateTime.parse(doc['check-in'].toDate().toString());
-                      var ago = timeset
-                          ? timeago.format(date)
-                          : DateFormat('dd MMM yyyy hh:mm').format(date);
-                      return Center(
-                          child: ListTile(
-                        title: Text('Name: ' + doc['user']),
-                        subtitle: Text('Phone Number: ' +
-                            doc['phone'] +
-                            '\nCheck-In: ' +
-                            ago.toString()),
-                        trailing: TextButton(
-                            child: const Text('Share'),
-                            onPressed: () async {
-                              await Share.share('Name:' +
-                                  doc['user'] +
-                                  '\nPhone:' +
-                                  doc['phone']);
-                            }),
-                      ));
-                    }).toList(),
                   );
                 },
+                //this widget rebuild if this value notifier changed
+                valueListenable: _limiter,
               ),
+            ),
+            //rebuild this widget only when reach end of scroll to show message
+            ValueListenableBuilder(
+              builder: (BuildContext context, value, Widget? child) {
+                return Container(
+                  height: 50.0,
+                  color: Colors.green,
+                  child: Center(
+                    child: Text(value.toString()),
+                  ),
+                );
+              },
+              valueListenable: _notify,
             ),
           ],
         ),
